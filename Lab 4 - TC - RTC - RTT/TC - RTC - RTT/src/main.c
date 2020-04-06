@@ -45,6 +45,7 @@ typedef struct  {
 volatile char flag_tc = 0;
 volatile Bool f_rtt_alarme = false;
 volatile char flag_rtc = 0;
+volatile char IRQ = 0;
 
 
 /************************************************************************/
@@ -116,6 +117,15 @@ void RTC_Handler(void)
 	*  na interrupcao, se foi por segundo
 	*  ou Alarm
 	*/
+	if ((ul_status & RTC_SR_SEC) == RTC_SR_SEC) {
+
+		//
+		//  Entrou por segundo!
+		//
+		rtc_clear_status(RTC, RTC_SCCR_SECCLR);
+		IRQ = 1;
+	}
+	
 	if ((ul_status & RTC_SR_SEC) == RTC_SR_SEC) {
 		rtc_clear_status(RTC, RTC_SCCR_SECCLR);
 	}
@@ -274,7 +284,7 @@ int main (void)
   
   // Escreve na tela um circulo e um texto
 	gfx_mono_draw_filled_circle(20, 16, 16, GFX_PIXEL_SET, GFX_WHOLE);
-  gfx_mono_draw_string("mundo", 50,16, &sysfont);
+    //gfx_mono_draw_string("TESTE", 50,16, &sysfont);
   
   // Inicializa RTT com IRQ no alarme.
   f_rtt_alarme = true;
@@ -285,7 +295,7 @@ int main (void)
 	
 	/** Configura RTC */
 	calendar rtc_initial = {2018, 3, 19, 12, 15, 45 ,1};
-	RTC_init(RTC, ID_RTC, rtc_initial, RTC_IER_ALREN);
+	RTC_init(RTC, ID_RTC, rtc_initial, RTC_IER_ALREN | RTC_IER_SECEN);
 
 	/* configura alarme do RTC */
 	rtc_set_date_alarm(RTC, 1, rtc_initial.month, 1, rtc_initial.day);
@@ -293,19 +303,29 @@ int main (void)
 	
   	/** Configura timer TC0, canal 1 */
   	TC_init(TC0, ID_TC1, 1, 4);
+	  uint32_t hh, mm, ss;
+	  char horario[512];
 
 
   /* Insert application code here, after the board has been initialized. */
 	while(1) {
+		
 		if(flag_tc){
 			pisca_led(1,10);
 			flag_tc = 0;
 		}
+		if (IRQ){
+			rtc_get_time(RTC, &hh, &mm, &ss);
+			sprintf(horario, "%2d:%2d:%2d", hh, mm, ss);
+			
+			gfx_mono_draw_string(horario, 50 , 16, &sysfont);
+			IRQ = 0;
+		}
 		/* Entrar em modo sleep */
-		if(flag_rtc){
-		  pisca_led_RTC(5, 200);
-		  flag_rtc = 0;
-		}  
+		//if(flag_rtc){
+		  //pisca_led_RTC(5, 200);
+		  //flag_rtc = 0;
+		//}  
 		if (f_rtt_alarme){
 		  /*
 		   * IRQ apos 4s -> 8*0.5
