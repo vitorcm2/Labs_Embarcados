@@ -23,6 +23,8 @@
 #define TASK_LCD_STACK_SIZE            (6*1024/sizeof(portSTACK_TYPE))
 #define TASK_LCD_STACK_PRIORITY        (tskIDLE_PRIORITY)
 
+#define PI 3.14159265
+
 typedef struct {
   uint x;
   uint y;
@@ -285,6 +287,15 @@ void mxt_handler(struct mxt_device *device, uint *x, uint *y)
   } while ((mxt_is_message_pending(device)) & (i < MAX_ENTRIES));
 }
 
+double calc_x(uint plot, int raio){
+	return raio * cos(2*PI*plot/4095);
+}
+
+double calc_y(uint plot, int raio){
+	return raio * sin(2*PI*plot/4095);
+}
+
+
 void TC_init(Tc * TC, int ID_TC, int TC_CHANNEL, int freq){
   uint32_t ul_div;
   uint32_t ul_tcclks;
@@ -324,48 +335,70 @@ void task_mxt(void){
   }
 }
 
-void task_lcd(void){
-  xQueueTouch = xQueueCreate( 10, sizeof( touchData ) );
-  xQueuePlot = xQueueCreate( 10, sizeof( t_plot ) );
-
-  // inicializa LCD e pinta de branco
-  configure_lcd();
-  draw_screen();
-
-  // strut local para armazenar msg enviada pela task do mxt
-  touchData touch;
-  t_plot plot;
-  
-  char buffer[64];
-  int x = 0;
-
-  while (true) {
-    if (xQueueReceive( xQueueTouch, &(touch), ( TickType_t )  0 / portTICK_PERIOD_MS)) {
-      //printf("Touch em: x:%d y:%d\n", touch.x, touch.y);
-    }
-    
-    if (xQueueReceive( xQueuePlot, &(plot), ( TickType_t )  100 / portTICK_PERIOD_MS)) {
-	    sprintf(buffer, "%04d", plot.raw);
-	    font_draw_text(&calibri_36, buffer, 0, 0, 2);
-	    
-	    if (x < ILI9488_LCD_WIDTH) {
-		    ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
-		    ili9488_draw_filled_circle(x, ILI9488_LCD_HEIGHT - plot.raw / 16, 2 );
-		    
-		    ili9488_set_foreground_color(COLOR_CONVERT(COLOR_RED));
-		    ili9488_draw_filled_circle(x, ILI9488_LCD_HEIGHT - plot.filtrado/ 16, 2 );
-		    
-		    x += 5;
-	    }
-	    
-	    if (x >= ILI9488_LCD_WIDTH) {
-		    x = 0;
-		    draw_screen();
-	    }
-	    
-    }
-  }
+void task_lcd(void)
+{
+	xQueueTouch = xQueueCreate( 10, sizeof( touchData ) );
+	xQueuePlot = xQueueCreate(10, sizeof(t_plot));
+	configure_lcd();
+	draw_screen();
+	
+	int desenhado =0;
+	int x = 0;
+	char buffer[70];
+	adcData adc;
+	t_plot plot;
+	// struct local para armazenar msg enviada pela task do mxt
+	touchData touch;
+	int raio = 80;
+	
+	uint32_t xOld, yOld;
+	
+	ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
+	ili9488_draw_filled_circle(ILI9488_LCD_WIDTH/2, ILI9488_LCD_HEIGHT/2, 105 );
+	
+	while (true) {
+		xOld = calc_x(plot.filtrado, raio) + + ILI9488_LCD_WIDTH/2;
+		yOld = calc_y(plot.filtrado, raio) + + ILI9488_LCD_HEIGHT/2;
+		
+		if (xQueueReceive( xQueueTouch, &(touch), ( TickType_t )  500 / portTICK_PERIOD_MS)) {
+			//printf("x:%d y:%d\n", touch.x, touch.y);
+		}
+		
+		if (xQueueReceive( xQueuePlot, &(plot), ( TickType_t )  100 / portTICK_PERIOD_MS)) {
+			// if( x <= ILI9488_LCD_WIDTH){
+			// x = x + 5;
+			
+			//plot_raw
+			//ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
+			//ili9488_draw_filled_circle(x, ILI9488_LCD_HEIGHT - plot.raw / 16, 2);
+			//plot_filtrado
+			//ili9488_set_foreground_color(COLOR_CONVERT(COLOR_RED));
+			//ili9488_draw_filled_circle(x, ILI9488_LCD_HEIGHT - plot.filtrado / 16, 2);
+			
+			//plot raw
+			// ili9488_set_foreground_color(COLOR_CONVERT(COLOR_GREEN));
+			//ili9488_draw_filled_circle(calc_x(plot.raw, raio)+ ILI9488_LCD_WIDTH/2,
+			//calc_y(plot.raw, raio)+ ILI9488_LCD_HEIGHT/2, 2);
+			
+			
+			//plot filtrado
+			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_BLACK));
+			ili9488_draw_filled_circle(xOld, yOld, 2);
+			
+			ili9488_set_foreground_color(COLOR_CONVERT(COLOR_RED));
+			ili9488_draw_filled_circle(calc_x(plot.filtrado, raio)+ ILI9488_LCD_WIDTH/2,
+			calc_y(plot.filtrado, raio)+ ILI9488_LCD_HEIGHT/2, 2);
+			
+			// }
+			// else{
+			// x = 0;
+			//draw_screen();
+			//}
+			
+		}
+	}
 }
+
 void task_adc(void){
 	adcData adc;
 	t_plot plot;
